@@ -1,0 +1,84 @@
+import requests
+import pandas as pd
+
+#authentication to receive token
+token_url = "https://apis-b2b.######.####/v1/oauthprovider/oauth2/token"
+client_id = "################################"
+client_secret = "##############################"
+vbu_number = '######'
+
+token_params = {
+    'client_id': client_id,
+    'client_secret': client_secret,
+    'grant_type': 'client_credentials'
+}
+
+#make post call
+token_response = requests.post(token_url, data=token_params)
+
+#get token. If error, stop the program.
+if token_response.status_code == 200:
+    token_data = token_response.json()
+    access_token = token_data.get('access_token')
+else:
+    print(f"Error in token request: {token_response.status_code}")
+
+#make get call
+#get list of Lowe's product IDs.
+sales_items_url = 'https://apis-b2b.lowes.com/vppapi/kong-proxy/v2/sales-inventory-items'
+
+#modify start and end date here
+start_date = '2024-01-01'
+end_date = '2025-09-29'
+
+headers = {
+    'Authorization' : access_token,
+    'Content-Type' : 'application/json'
+    }
+
+sales_items_params = {
+    'vbu_number' : vbu_number,
+    'start_date' : start_date,
+    'end_date' : end_date
+    }
+
+sales_items_response = requests.get(sales_items_url, params=sales_items_params, headers = headers)
+
+print(sales_items_response.status_code)
+print(sales_items_response.json())
+
+all_items = sales_items_response.json()
+#make post call
+#get sales
+sales_url = 'https://apis-b2b.lowes.com/vppapi/kong-proxy/v1/sales-and-inventory'
+all_sales_data = []
+
+counter = 0
+#Replace fore loop below for small sample
+#for i in range(0, 5, 10): 
+for i in range(0, len(all_items), 10):   
+    batch_item_ids = all_items[i:i+10]
+    sales_params = {
+        'start_date' : start_date,
+        'end_date' : end_date,
+        "items": batch_item_ids,
+        'vbu_number' : vbu_number
+        }
+    counter += 1
+    print(counter)
+    # Make the POST request
+    sales_response = requests.post(sales_url, json=sales_params, headers = headers)
+
+    # Check if the request was successful
+    if sales_response.status_code == 200:
+        # Append the sales data from this batch to the overall all_sales_data list
+        all_sales_data.extend(sales_response.json())
+    else:
+        print(f"Error fetching sales data for batch {i}-{i+15}: {sales_response.text}")
+
+# Convert all_sales_data to DataFrame
+sales_data = pd.DataFrame(all_sales_data)
+
+# Export to CSV file
+output_path = r'C:\Users\dalee\Desktop\vpp_exportt.csv'
+sales_data.to_csv(output_path, index=False)
